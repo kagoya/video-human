@@ -68,12 +68,17 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(360, 270);
+  createCanvas(windowWidth, windowHeight).parent("stage");
   pixelDensity(1);
+  fitScreen();
+  new ResizeObserver(fitScreen).observe(document.getElementById("stage"));
+  window.visualViewport?.addEventListener("resize", fitScreen);
 
   startButton = createButton("カメラを開始");
+  startButton.parent("controls");
   startButton.mousePressed(startCamera);
   bodyStatus = createP("カメラを開始すると、体の認識モデルを読み込みます。");
+  bodyStatus.parent("controls");
   bodyStatus.attribute("role", "status");
 
   maskCanvas = document.createElement("canvas");
@@ -103,8 +108,8 @@ function startCamera() {
   camera = createCapture({
     video: {
       facingMode: "user",
-      width: { ideal: 640 },
-      height: { ideal: 480 }
+      width: { ideal: width < height ? 480 : 640 },
+      height: { ideal: width < height ? 640 : 480 }
     },
     audio: false
   });
@@ -119,11 +124,20 @@ function draw() {
 
   if (!camera || camera.elt.readyState < 2) return;
 
-  image(camera, 0, 0, width, height);
+  const videoWidth = camera.elt.videoWidth;
+  const videoHeight = camera.elt.videoHeight;
+  if (!videoWidth || !videoHeight) return;
+  if (camera.width !== videoWidth || camera.height !== videoHeight) {
+    camera.size(videoWidth, videoHeight);
+    faces = [];
+    lastBodyDetected = -Infinity;
+  }
+  const placement = videoPlacement(videoWidth, videoHeight, width, height);
+  drawingContext.drawImage(camera.elt, placement.x, placement.y, placement.width, placement.height);
 
   // 顔が見つからない場合でも、体の輪郭を独立して描きます。
   if (millis() - lastBodyDetected < 800) {
-    drawingContext.drawImage(bodyCanvas, 0, 0, width, height);
+    drawingContext.drawImage(bodyCanvas, placement.x, placement.y, placement.width, placement.height);
   }
   if (!bodyBusy && !bodyFailed && millis() - lastBodyRequest >= 150) {
     detectBody();
@@ -132,12 +146,8 @@ function draw() {
   if (!detectionStarted) {
     detectionStarted = true;
 
-    camera.size(
-      camera.elt.videoWidth,
-      camera.elt.videoHeight
-    );
-
     faceMesh.detectStart(camera, gotFaces);
+    startButton.hide();
   }
 
   // 検出が一瞬途切れても、0.8秒間は輪郭を残します。
@@ -164,8 +174,7 @@ function gotFaces(results) {
 
 // 特徴点を順番につなぎ、閉じた輪郭を描きます。
 function drawOutline(points, indices, lineColor) {
-  const scaleX = width / camera.elt.videoWidth;
-  const scaleY = height / camera.elt.videoHeight;
+  const placement = videoPlacement(camera.elt.videoWidth, camera.elt.videoHeight, width, height);
 
   noFill();
   stroke(lineColor);
@@ -177,8 +186,8 @@ function drawOutline(points, indices, lineColor) {
     const point = points[index];
 
     vertex(
-      point.x * scaleX,
-      point.y * scaleY
+      placement.x + point.x * placement.scale,
+      placement.y + point.y * placement.scale
     );
   }
 
@@ -199,6 +208,7 @@ async function detectBody() {
 
 function reportBodyError(error) {
   bodyFailed = true;
+  bodyStatus.elt.hidden = false;
   bodyStatus.html("体の認識を開始できませんでした。通信を確認してページを再読み込みしてください。顔の輪郭は引き続き表示します。");
   console.error("Body segmentation failed:", error);
 }
@@ -212,7 +222,8 @@ function gotBody(results) {
 
   bodyContext.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
   bodyContext.strokeStyle = BODY_COLOR;
-  bodyContext.lineWidth = 1.5;
+  const placement = videoPlacement(camera.elt.videoWidth, camera.elt.videoHeight, width, height);
+  bodyContext.lineWidth = 3 * MASK_WIDTH / placement.width;
   bodyContext.lineJoin = "round";
   bodyContext.lineCap = "round";
   bodyContext.beginPath();
@@ -223,8 +234,36 @@ function gotBody(results) {
   bodyContext.stroke();
   lastBodyDetected = millis();
   bodyStatus.html(segments.length
-    ? "体の輪郭を表示中です。全身を画面に入れると、脚まで輪郭が描かれます。"
+    ? ""
     : "人物を探しています。明るい場所で体を画面に入れてください。");
+  bodyStatus.elt.hidden = segments.length > 0;
+}
+
+function windowResized() {
+  fitScreen();
+}
+
+function fitScreen() {
+  const stage = document.getElementById("stage");
+  const targetWidth = Math.max(1, Math.round(stage.clientWidth));
+  const targetHeight = Math.max(1, Math.round(stage.clientHeight));
+  if (width !== targetWidth || height !== targetHeight) {
+    resizeCanvas(targetWidth, targetHeight);
+  }
+}
+
+// 比率を保って中央から画面を埋めます。映像と全輪郭に同じ変換を使います。
+function videoPlacement(sourceWidth, sourceHeight, targetWidth, targetHeight) {
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const displayWidth = sourceWidth * scale;
+  const displayHeight = sourceHeight * scale;
+  return {
+    scale,
+    x: (targetWidth - displayWidth) / 2,
+    y: (targetHeight - displayHeight) / 2,
+    width: displayWidth,
+    height: displayHeight
+  };
 }
 
 // 人物と背景の境界を追うMarching Squares。

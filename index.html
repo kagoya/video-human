@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     >
     <title>顔と体の輪郭を検出</title>
 
@@ -13,29 +13,58 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js"></script>
 
     <style>
-      body {
-        margin: 16px;
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #141e32;
+        color: white;
         font-family: sans-serif;
       }
-
-      canvas {
-        display: block;
-        max-width: 100%;
-        height: auto !important;
+      #stage {
+        position: fixed;
+        inset: 0;
+        height: 100%;
+        height: 100dvh;
       }
-
-      button {
-        margin-top: 12px;
+      #stage canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      #controls {
+        position: fixed;
+        z-index: 1;
+        left: max(16px, env(safe-area-inset-left));
+        right: max(16px, env(safe-area-inset-right));
+        bottom: max(16px, env(safe-area-inset-bottom));
+        pointer-events: none;
+      }
+      #controls button {
+        pointer-events: auto;
         padding: 12px 20px;
         font-size: 16px;
+        border: 0;
+        border-radius: 10px;
+        color: white;
+        background: #202b40;
+      }
+      #controls p {
+        width: fit-content;
+        max-width: 100%;
+        margin: 8px 0 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.55);
+        font-size: 14px;
       }
     </style>
   </head>
 
   <body>
-    <main></main>
-    <p>体の外周はオレンジ色、顔は緑、目は水色、鼻は黄色、口はピンクで表示します。</p>
-    <p>全身を映すには、カメラから離れて頭から足まで画面に入れてください。映像はブラウザ内で処理します。</p>
+    <main id="stage" aria-label="顔と体の輪郭を重ねたカメラ映像"></main>
+    <div id="controls"></div>
     <script src="sketch.js"></script>
   </body>
 </html>
