@@ -1,5 +1,5 @@
-// v1.3.0 — 同じCanvas画像を認識に使い、Safariの回転と映像座標を揃えます。
-const APP_VERSION = "1.3.0";
+// v1.4.0 — 手で隠れた顔のパーツを描かず、すべての色の凡例を表示します。
+const APP_VERSION = "1.4.0";
 const BODY_COLOR = "#ff8c00";
 const BODY_MODEL_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/";
 const MASK_WIDTH = 180;
@@ -19,6 +19,10 @@ let bodyContext;
 let faceMesh;
 let faceReady = false;
 let faceFailed = false;
+let handPose;
+let handReady = false;
+let handFailed = false;
+let handOcclusions = [];
 let bodySegmentation;
 let bodyFailed = false;
 let modelsStarted = false;
@@ -118,6 +122,7 @@ function stopStream(mediaStream) {
 
 function invalidateResults() {
   faces = [];
+  handOcclusions = [];
   lastDetected = -Infinity;
   lastBodyDetected = -Infinity;
 }
@@ -192,6 +197,7 @@ function loadModels() {
   if (modelsStarted) return;
   modelsStarted = true;
   setStatus("face-status", "顔：モデル読み込み中…");
+  setStatus("hand-status", "手：モデル読み込み中…");
   setStatus("body-status", "体：モデル読み込み中…");
   try {
     faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipped: false });
@@ -206,6 +212,21 @@ function loadModels() {
   } catch (error) {
     faceFailed = true;
     setStatus("face-status", "顔：読み込みエラー。再読み込みしてください。");
+    console.error(error);
+  }
+  try {
+    handPose = ml5.handPose({ maxHands: 2, modelType: "lite", flipped: false });
+    handPose.ready.then(() => {
+      handReady = true;
+      setStatus("hand-status", "手：顔の隠れを確認します");
+    }).catch(error => {
+      handFailed = true;
+      setStatus("hand-status", "手：読み込み失敗（隠れ判定は停止中）");
+      console.error(error);
+    });
+  } catch (error) {
+    handFailed = true;
+    setStatus("hand-status", "手：読み込み失敗（隠れ判定は停止中）");
     console.error(error);
   }
   try {
@@ -236,12 +257,14 @@ function draw() {
   }
   if (millis() - lastDetected < 700 && faces.length) {
     const points = faces[0].keypoints;
-    drawOutline(points, faceOutline, "#00ff88", placement);
+    drawOutline(points, faceOutline, "#00ff88", placement, true);
     drawOutline(points, eyeOutline1, "#00ddff", placement);
     drawOutline(points, eyeOutline2, "#00ddff", placement);
     drawOutline(points, noseOutline, "#ffff00", placement);
-    drawOutline(points, mouthOuter, "#ff88cc", placement);
-    drawOutline(points, mouthInner, "#ff88cc", placement);
+    if (!outlineOccluded(points, mouthOuter)) {
+      drawOutline(points, mouthOuter, "#ff88cc", placement);
+      drawOutline(points, mouthInner, "#ff88cc", placement);
+    }
   }
   if (!inferenceBusy && modelsStarted && millis() - lastRequest >= 180) inferFrame();
 }
@@ -257,11 +280,25 @@ async function inferFrame() {
   frameContext.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
   const snapshot = { generation, width: frameCanvas.width, height: frameCanvas.height };
   try {
-    // 2つの認識を直列で実行して、iPhone/iPadのGPU負荷を抑えます。
+    // 同じ画像から顔と手を検出し、結果を一緒に更新します。
+    // モデルは直列で実行して、iPhone/iPadのGPU負荷を抑えます。
     if (faceReady && !faceFailed) {
       try {
         const results = await faceMesh.detect(frameCanvas);
+        let occlusions = [];
+        if (handReady && !handFailed) {
+          try {
+            const hands = await handPose.detect(frameCanvas);
+            occlusions = hands.filter(hand => (hand.confidence ?? 1) >= 0.5)
+              .map(hand => handPolygon(hand.keypoints, snapshot.width, snapshot.height));
+          } catch (error) {
+            handFailed = true;
+            setStatus("hand-status", "手：認識エラー（隠れ判定は停止中）");
+            console.error(error);
+          }
+        }
         if (generation === cameraGeneration) {
+          handOcclusions = occlusions;
           faces = results.map(face => ({
             keypoints: face.keypoints.map(point => ({
               x: point.x / snapshot.width, y: point.y / snapshot.height
@@ -269,6 +306,9 @@ async function inferFrame() {
           }));
           lastDetected = millis();
           setStatus("face-status", faces.length ? "顔：検出中" : "顔：未検出（正面を向いてください）");
+          if (handReady && !handFailed) {
+            setStatus("hand-status", occlusions.length ? "手：検出中（重なった輪郭を非表示）" : "手：重なりなし");
+          }
         }
       } catch (error) {
         faceFailed = true;
@@ -291,16 +331,91 @@ async function inferFrame() {
   }
 }
 
-function drawOutline(points, indices, color, placement) {
+function drawOutline(points, indices, color, placement, partial = false) {
+  if (!partial && outlineOccluded(points, indices)) return;
   noFill();
   stroke(color);
   strokeWeight(2);
+  if (partial) {
+    // 顔の外周は、手が重なる線分だけ消します。
+    for (let i = 0; i < indices.length; i++) {
+      const a = points[indices[i]];
+      const b = points[indices[(i + 1) % indices.length]];
+      if (handOcclusions.some(polygon => segmentInPolygon(a, b, polygon))) continue;
+      line(placement.x + a.x * placement.width, placement.y + a.y * placement.height,
+        placement.x + b.x * placement.width, placement.y + b.y * placement.height);
+    }
+    return;
+  }
   beginShape();
   for (const index of indices) {
     const point = points[index];
     vertex(placement.x + point.x * placement.width, placement.y + point.y * placement.height);
   }
   endShape(CLOSE);
+}
+
+function handPolygon(keypoints, frameWidth, frameHeight) {
+  // 指の間も含む保守的な外周を作り、特徴点から指の太さ分だけ広げます。
+  const hull = convexHull(keypoints.map(p => ({ x: p.x, y: p.y })));
+  if (hull.length < 3) return [];
+  const center = hull.reduce((c, p) => ({ x: c.x + p.x / hull.length, y: c.y + p.y / hull.length }), { x: 0, y: 0 });
+  return hull.map(p => {
+    const dx = p.x - center.x;
+    const dy = p.y - center.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    return { x: (p.x + dx / distance * 12) / frameWidth, y: (p.y + dy / distance * 12) / frameHeight };
+  });
+}
+
+function convexHull(points) {
+  const sorted = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const lower = [];
+  const upper = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  for (const p of sorted.slice().reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if ((a.y > point.y) !== (b.y > point.y)
+      && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const cross = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  // Bounding boxesも確認し、離れた同一直線上の線分を重なりとしません。
+  return Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) <= Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x))
+    && Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)) <= Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y))
+    && cross(a, b, c) * cross(a, b, d) <= 0 && cross(c, d, a) * cross(c, d, b) <= 0;
+}
+
+function segmentInPolygon(a, b, polygon) {
+  if (pointInPolygon(a, polygon) || pointInPolygon(b, polygon)) return true;
+  return polygon.some((p, i) => segmentsIntersect(a, b, p, polygon[(i + 1) % polygon.length]));
+}
+
+function outlineOccluded(points, indices) {
+  const outline = indices.map(i => points[i]);
+  return handOcclusions.some(polygon => {
+    if (!polygon.length) return false;
+    // 手がパーツの中にすっぽり収まる場合も判定します。
+    if (polygon.some(p => pointInPolygon(p, outline))) return true;
+    return outline.some((p, i) => segmentInPolygon(p, outline[(i + 1) % outline.length], polygon));
+  });
 }
 
 function gotBody(results) {

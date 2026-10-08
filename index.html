@@ -3,13 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>顔と体の輪郭 v1.3.0</title>
+  <title>顔と体の輪郭 v1.4.0</title>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; width: 100%; height: 100%; background: white; color: #172033; font-family: sans-serif; }
     #app { height: 100%; height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px;
       padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
     header { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+    #heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+    #legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+    #legend span { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+    #legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--color); border: 1px solid #777; }
     #version { white-space: nowrap; font-weight: bold; }
     #stage { position: relative; min-height: 0; min-width: 0; overflow: hidden; background: #141e32; border: 3px solid white; outline: 1px solid #d8dce3; }
     #stage canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
@@ -23,13 +27,25 @@
 </head>
 <body>
   <div id="app">
-    <header><span>顔と体の輪郭 <span style="color:#c65c00">● 体</span></span><span id="version">v1.3.0</span></header>
+    <header>
+      <div id="heading"><span>顔と体の輪郭</span>
+        <div id="legend" aria-label="輪郭線の色">
+          <span><i style="--color:#00ff88" aria-hidden="true"></i>顔</span>
+          <span><i style="--color:#00ddff" aria-hidden="true"></i>目</span>
+          <span><i style="--color:#ffff00" aria-hidden="true"></i>鼻</span>
+          <span><i style="--color:#ff88cc" aria-hidden="true"></i>口</span>
+          <span><i style="--color:#ff8c00" aria-hidden="true"></i>体</span>
+        </div>
+      </div>
+      <span id="version">v1.4.0</span>
+    </header>
     <main id="stage" aria-label="顔と体の輪郭を重ねたカメラ映像"></main>
     <footer>
       <button id="camera-button" type="button" disabled>読み込み中…</button>
       <div id="status" role="status">
         <p id="camera-status">ライブラリを読み込んでいます。</p>
         <p id="face-status">顔：待機中</p>
+        <p id="hand-status">手：待機中</p>
         <p id="body-status">体：待機中</p>
       </div>
     </footer>
@@ -42,6 +58,6 @@
   <script defer src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.min.js" onerror="libraryError('p5.js')"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/ml5@1.2.1/dist/ml5.min.js" onerror="libraryError('顔認識ライブラリ')"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" onerror="libraryError('体認識ライブラリ')"></script>
-  <script defer src="sketch.js?v=1.3.0" onerror="libraryError('描画コード')"></script>
+  <script defer src="sketch.js?v=1.4.0" onerror="libraryError('描画コード')"></script>
 </body>
 </html>
