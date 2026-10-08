@@ -6,10 +6,11 @@
       name="viewport"
       content="width=device-width, initial-scale=1"
     >
-    <title>顔のパーツを検出</title>
+    <title>顔と体の輪郭を検出</title>
 
     <script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ml5@1.2.1/dist/ml5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js"></script>
 
     <style>
       body {
@@ -33,6 +34,8 @@
 
   <body>
     <main></main>
+    <p>体の外周はオレンジ色、顔は緑、目は水色、鼻は黄色、口はピンクで表示します。</p>
+    <p>全身を映すには、カメラから離れて頭から足まで画面に入れてください。映像はブラウザ内で処理します。</p>
     <script src="sketch.js"></script>
   </body>
 </html>
