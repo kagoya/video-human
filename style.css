@@ -1,139 +1,281 @@
-let camera;
-let faceMesh;
-let faces = [];
-let lastDetected = 0;
-let detectionStarted = false;
-let startButton;
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap");
 
-// 輪郭に沿って並べた特徴点の番号
-const faceOutline = [
-  10, 338, 297, 332, 284, 251, 389, 356,
-  454, 323, 361, 288, 397, 365, 379, 378,
-  400, 377, 152, 148, 176, 149, 150, 136,
-  172, 58, 132, 93, 234, 127, 162, 21,
-  54, 103, 67, 109
-];
-
-const eyeOutline1 = [
-  33, 7, 163, 144, 145, 153, 154, 155,
-  133, 173, 157, 158, 159, 160, 161, 246
-];
-
-const eyeOutline2 = [
-  263, 249, 390, 373, 374, 380, 381, 382,
-  362, 398, 384, 385, 386, 387, 388, 466
-];
-
-const noseOutline = [
-  168, 193, 122, 196, 3, 51, 115, 131,
-  134, 102, 48, 64, 98, 97, 2, 326,
-  327, 294, 278, 331, 363, 360, 344,
-  281, 248, 419, 351, 417
-];
-
-const mouthOuter = [
-  61, 185, 40, 39, 37, 0, 267, 269,
-  270, 409, 291, 375, 321, 405, 314,
-  17, 84, 181, 91, 146
-];
-
-const mouthInner = [
-  78, 191, 80, 81, 82, 13, 312, 311,
-  310, 415, 308, 324, 318, 402, 317,
-  14, 87, 178, 88, 95
-];
-
-function preload() {
-  faceMesh = ml5.faceMesh({
-    maxFaces: 1,
-    refineLandmarks: false,
-    flipped: false
-  });
+:root {
+  color-scheme: dark;
+  font-family: "DM Sans", "Noto Sans JP", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #f5f4f1;
+  --muted: #9597a6;
+  --accent: #c3f36b;
+  --panel: #191c28;
 }
 
-function setup() {
-  createCanvas(360, 270);
-
-  startButton = createButton("カメラを開始");
-  startButton.mousePressed(startCamera);
+* {
+  box-sizing: border-box;
 }
 
-function startCamera() {
-  startButton.attribute("disabled", "");
-
-  camera = createCapture({
-    video: {
-      facingMode: "user",
-      width: { ideal: 640 },
-      height: { ideal: 480 }
-    },
-    audio: false
-  });
-
-  camera.elt.setAttribute("playsinline", "");
-  camera.elt.muted = true;
-  camera.hide();
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(79, 74, 126, .18), transparent 48%),
+    #10131d;
 }
 
-function draw() {
-  background(20, 30, 50);
+button {
+  font: inherit;
+}
 
-  if (!camera || camera.elt.readyState < 2) return;
+.app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 26px clamp(20px, 5vw, 72px) 20px;
+}
 
-  image(camera, 0, 0, width, height);
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-  if (!detectionStarted) {
-    detectionStarted = true;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  text-decoration: none;
+}
 
-    camera.size(
-      camera.elt.videoWidth,
-      camera.elt.videoHeight
-    );
+.brand-icon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border-radius: 10px;
+  color: #141827;
+  background: var(--accent);
+  font-size: 20px;
+}
 
-    faceMesh.detectStart(camera, gotFaces);
+.sound-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #b6b8c3;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .13em;
+}
+
+.sound-indicator span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(195, 243, 107, .55);
+}
+
+.instrument {
+  display: flex;
+  width: min(100%, 800px);
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  padding: 56px 0 42px;
+}
+
+.intro {
+  margin-bottom: 44px;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(27px, 5vw, 42px);
+  font-weight: 600;
+  letter-spacing: -.04em;
+}
+
+.description {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.piano {
+  width: min(100%, 700px);
+  padding: 20px 20px 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 19px;
+  background: linear-gradient(145deg, #202331, var(--panel));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .3);
+}
+
+.keys {
+  position: relative;
+  display: flex;
+  height: clamp(190px, 34vw, 280px);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #e9e8e4;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.key {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.key:focus-visible {
+  z-index: 3;
+  outline: 3px solid #8ca9ff;
+  outline-offset: -4px;
+}
+
+.key.white {
+  z-index: 1;
+  width: 12.5%;
+  height: 100%;
+  border: 0;
+  border-right: 1px solid #d1d0cd;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(180deg, #fff 0%, #f3f2ee 75%, #e2e1dc 100%);
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .035);
+}
+
+.key.white:last-of-type {
+  border-right: 0;
+}
+
+.key.white.is-active {
+  background: linear-gradient(180deg, #e9f5d7, #c3f36b);
+}
+
+.key.black {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: calc(var(--position) * 12.5% - 3.5%);
+  width: 7%;
+  height: 61%;
+  border: 1px solid #07080c;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(90deg, #11131a, #292c37 55%, #090a0f);
+  box-shadow: 0 5px 7px rgba(0, 0, 0, .38);
+}
+
+.key.black.is-active {
+  background: linear-gradient(90deg, #58673e, #81994f 55%, #39452a);
+}
+
+.key-hint {
+  color: #999ba1;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .75;
+}
+
+.key.black .key-hint {
+  color: #c1c3cc;
+  font-size: 9px;
+}
+
+.keyboard-guide {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 3px 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.guide-keys {
+  color: #e1e2e7;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+.guide-keys span {
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+.note {
+  min-height: 20px;
+  margin: 23px 0 0;
+  color: #bfc0ca;
+  font-size: 12px;
+}
+
+footer {
+  color: #777987;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 18px 16px 16px;
   }
 
-  // 検出が一瞬途切れても、0.8秒間は輪郭を残します。
-  if (faces.length === 0 || millis() - lastDetected > 800) {
-    return;
+  .instrument {
+    padding: 45px 0 35px;
   }
 
-  const points = faces[0].keypoints;
+  .intro {
+    margin-bottom: 34px;
+  }
 
-  drawOutline(points, faceOutline, "#00ff88");
-  drawOutline(points, eyeOutline1, "#00ddff");
-  drawOutline(points, eyeOutline2, "#00ddff");
-  drawOutline(points, noseOutline, "#ffff00");
-  drawOutline(points, mouthOuter, "#ff88cc");
-  drawOutline(points, mouthInner, "#ff88cc");
+  .piano {
+    padding: 12px 12px 10px;
+    border-radius: 14px;
+  }
+
+  .keys {
+    height: clamp(180px, 58vw, 240px);
+  }
+
+  .keyboard-guide {
+    font-size: 9px;
+  }
 }
 
-function gotFaces(results) {
-  if (results.length > 0) {
-    faces = results;
-    lastDetected = millis();
-  }
-}
-
-// 特徴点を順番につなぎ、閉じた輪郭を描きます。
-function drawOutline(points, indices, lineColor) {
-  const scaleX = width / camera.elt.videoWidth;
-  const scaleY = height / camera.elt.videoHeight;
-
-  noFill();
-  stroke(lineColor);
-  strokeWeight(2);
-
-  beginShape();
-
-  for (const index of indices) {
-    const point = points[index];
-
-    vertex(
-      point.x * scaleX,
-      point.y * scaleY
-    );
+@media (prefers-reduced-motion: no-preference) {
+  .key {
+    transition: filter 90ms ease, transform 90ms ease;
   }
 
-  endShape(CLOSE);
+  .key.white.is-active {
+    transform: translateY(2px);
+  }
+
+  .key.black.is-active {
+    filter: brightness(1.3);
+  }
 }
